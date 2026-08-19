@@ -1,0 +1,46 @@
+# Domain Routing Manifest
+# Machine-readable lookup table for deterministic query routing.
+# brief.ps1 consults this BEFORE any grep or model reasoning.
+# Generated from actual codebase structure + navigation.md + lessons-learned.md.
+# Update when new modules/handlers are added.
+
+backend:
+  # Examples of module configuration:
+  # module_name:
+  #   keywords:
+  #     - keyword1
+  #     - keyword2
+  #   docs:
+  #     - "ai-workspace/Obsidian/Backend/path/to/doc.md"
+  #   handlers:
+  #     - "backend/internal/adapter/http/handler/handler.go"
+  #   services:
+  #     - "backend/internal/service/service.go"
+  #   domain:
+  #     - "backend/internal/domain/domain.go"
+  #   adapters:
+  #     - "backend/internal/adapter/postgres/repository.go"
+  #   tests:
+  #     - "backend/internal/service/service_test.go"
+  #   hot_symbols:
+  #     - "FunctionNameOrStruct"
+
+frontend:
+  # Examples of module configuration:
+  # module_name:
+  #   keywords:
+  #     - keyword1
+  #     - keyword2
+  #   docs:
+  #     - "ai-workspace/Obsidian/Frontend/path/to/doc.md"
+  #   components:
+  #     - "frontend/src/modules/module_name/components/Component.tsx"
+  #   hooks:
+  #     - "frontend/src/modules/module_name/hooks/useHook.ts"
+  #   api:
+  #     - "frontend/src/modules/module_name/api/api.ts"
+  #   tests:
+  #     - "frontend/src/modules/module_name/tests/test.spec.tsx"
+  #   hot_symbols:
+  #     - "ComponentOrHookName"
+

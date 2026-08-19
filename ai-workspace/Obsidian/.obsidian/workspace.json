@@ -1,0 +1,208 @@
+{
+  "main": {
+    "id": "ac864bf2901136df",
+    "type": "split",
+    "children": [
+      {
+        "id": "2c5ffbc28a2e0646",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "158f792b9537f40d",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "vertical"
+  },
+  "left": {
+    "id": "45ae8b12a28d772d",
+    "type": "split",
+    "children": [
+      {
+        "id": "91782a4c499d0eb7",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "c3ad28196e79a8e5",
+            "type": "leaf",
+            "state": {
+              "type": "file-explorer",
+              "state": {
+                "sortOrder": "alphabetical",
+                "autoReveal": false
+              },
+              "icon": "lucide-folder-closed",
+              "title": "Files"
+            }
+          },
+          {
+            "id": "cf48f4523a061ce5",
+            "type": "leaf",
+            "state": {
+              "type": "search",
+              "state": {
+                "query": "",
+                "matchingCase": false,
+                "explainSearch": false,
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical"
+              },
+              "icon": "lucide-search",
+              "title": "Search"
+            }
+          },
+          {
+            "id": "48be7aeca4dc4ac4",
+            "type": "leaf",
+            "state": {
+              "type": "bookmarks",
+              "state": {},
+              "icon": "lucide-bookmark",
+              "title": "Bookmarks"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300
+  },
+  "right": {
+    "id": "03a266120e6a27e3",
+    "type": "split",
+    "children": [
+      {
+        "id": "ef5f6a04c7e8661f",
+        "type": "tabs",
+        "children": [
+          {
+            "id": "9cb55a63a705438e",
+            "type": "leaf",
+            "state": {
+              "type": "backlink",
+              "state": {
+                "collapseAll": false,
+                "extraContext": false,
+                "sortOrder": "alphabetical",
+                "showSearch": false,
+                "searchQuery": "",
+                "backlinkCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-coming-in",
+              "title": "Backlinks"
+            }
+          },
+          {
+            "id": "6ba6ee3ce46bc3d8",
+            "type": "leaf",
+            "state": {
+              "type": "outgoing-link",
+              "state": {
+                "file": "05-Resources/Source README.md",
+                "linksCollapsed": false,
+                "unlinkedCollapsed": true
+              },
+              "icon": "links-going-out",
+              "title": "Outgoing links from Source README"
+            }
+          },
+          {
+            "id": "ac8dd6926880793a",
+            "type": "leaf",
+            "state": {
+              "type": "tag",
+              "state": {
+                "sortOrder": "frequency",
+                "useHierarchy": true,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-tags",
+              "title": "Tags"
+            }
+          },
+          {
+            "id": "4610dffe15e0ded8",
+            "type": "leaf",
+            "state": {
+              "type": "all-properties",
+              "state": {
+                "sortOrder": "frequency",
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-archive",
+              "title": "All properties"
+            }
+          },
+          {
+            "id": "292b2793c9abfa58",
+            "type": "leaf",
+            "state": {
+              "type": "outline",
+              "state": {
+                "file": "05-Resources/Source README.md",
+                "followCursor": false,
+                "showSearch": false,
+                "searchQuery": ""
+              },
+              "icon": "lucide-list",
+              "title": "Outline of Source README"
+            }
+          }
+        ]
+      }
+    ],
+    "direction": "horizontal",
+    "width": 300,
+    "collapsed": true
+  },
+  "left-ribbon": {
+    "hiddenItems": {
+      "switcher:Open quick switcher": false,
+      "graph:Open graph view": false,
+      "canvas:Create new canvas": false,
+      "daily-notes:Open today's daily note": false,
+      "templates:Insert template": false,
+      "command-palette:Open command palette": false,
+      "bases:Create new base": false
+    }
+  },
+  "active": "158f792b9537f40d",
+  "lastOpenFiles": [
+    "02-Architecture/API Route Map.md",
+    "hi.md",
+    "Untitled",
+    "01-Overview/Source Code Findings.md",
+    "01-Overview/Scope.md",
+    "01-Overview/Project Overview.md",
+    "01-Overview/Known Gaps.md",
+    "00-Home/Home.md",
+    "Untitled.base",
+    "07-Glossary/Server.md",
+    "07-Glossary/Stripe.md",
+    "log.md",
+    "Untitled 2.base",
+    "Untitled 1.base",
+    "index.md",
+    "07-Glossary/New Relic.md",
+    "07-Glossary/CCAvenue.md",
+    "05-Resources/Stripe Integration Proposal.md",
+    "raw/example-source.md",
+    "raw",
+    "07-Glossary/Firebase.md",
+    "99-Templates/Task Template.md",
+    "99-Templates/Note Template.md",
+    "05-Resources/Source README.md"
+  ]
+}
