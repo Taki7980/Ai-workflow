@@ -1,5 +1,5 @@
-# 🌟 Universal Token-Efficient AI Agent Workflow (26/08/2026)
-k
+# 🌟 Universal Token-Efficient AI Agent Workflow (26/08/2026) by kisuke
+
 A **universal, agent-agnostic** workflow for AI-assisted coding. Works seamlessly with any AI agent —
 Gemini, Antigravity, Claude, GPT/Codex, Cursor, Copilot, or custom LLM assistants.
 
