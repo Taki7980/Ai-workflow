@@ -1,14 +1,16 @@
-# RTK - Rust Token Killer (Google Antigravity)
+# Output Compression — Agent Reference
 
-**Usage**: Token-optimized CLI proxy for shell commands.
+Reduce shell-output tokens returned to the model context. Choose the method your agent supports.
 
-## Rule
+## Universal rules (all agents)
 
-Use `rtk` for supported commands with noisy output. Keep short, readable
-commands direct. Do not blindly prefix every command: filtering can hide
-evidence and adds no useful savings for small output.
+- Noisy command → compress it.
+- Short readable output → run it direct. Never add overhead for no gain.
+- Exact evidence needed → always skip compression (`rtk proxy` / raw pipe).
 
-Examples:
+## RTK (Gemini / Antigravity CLI)
+
+**RTK** = built-in output filter. Rewrites noisy command output before it enters model context.
 
 ```bash
 rtk git status
@@ -19,21 +21,24 @@ rtk docker ps
 rtk gh pr list
 ```
 
-## Meta Commands
-
+Meta:
 ```bash
-rtk gain              # Show token savings
-rtk gain --history    # Command history with savings
+rtk gain              # Show token savings this session
+rtk gain --history    # Per-command history
 rtk discover          # Find missed RTK opportunities
-rtk proxy <cmd>       # Run raw (no filtering, for debugging)
+rtk proxy <cmd>       # Run raw (no filtering — for debugging)
+rtk powershell <cmd>  # PowerShell command with RTK filtering
 ```
 
-## Selection
+## Equivalent for other agents
 
-- Noisy command: `rtk <command>`.
-- Short PowerShell read: direct `Get-Content`, `rg`, or targeted check.
-- Exact evidence: `rtk proxy <command>`.
-- PowerShell command needing RTK filtering: `rtk powershell <command>`.
+| Agent | Equivalent |
+|---|---|
+| Claude Code (CLI) | `--compact` flag; or pipe `\| head -n 80` |
+| GPT / Codex | `\| Select-Object -First 50` in PowerShell |
+| Cursor | Use built-in diff view; don't paste raw `git diff` |
+| Any | `git diff --stat` instead of `git diff` for summaries |
 
-RTK reduces shell-output tokens, not total model cost. Verify impact with
-`rtk gain` and `rtk gain --history`.
+RTK reduces shell-output tokens, not total model cost. Measure impact with `rtk gain`.
+<!-- ponytail: RTK-only tool; ceiling is other-agent users get no compression tooling; upgrade: this table grows as agents add native filters -->
+

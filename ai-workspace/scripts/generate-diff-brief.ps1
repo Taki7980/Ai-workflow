@@ -1,39 +1,72 @@
+<#
+.SYNOPSIS
+  setup.ps1 — one-shot bootstrap. Run ONCE after copying this template into your project.
+  Fills placeholders, generates indexes, verifies workflow integrity.
+
+.PARAMETER ProjectName
+  Human-readable project name (replaces {{PROJECT_NAME}} everywhere).
+
+.PARAMETER ProjectRoot
+  Absolute path to your project root. Defaults to workspace root (auto-detected).
+
+.EXAMPLE
+  powershell -NoProfile -ExecutionPolicy Bypass -File ai-workspace/scripts/setup.ps1 -ProjectName "MyApp"
+#>
 param(
-    [ValidateSet("backend", "frontend", "both")]
-    [string]$Repo = "both",
-    [switch]$Detailed
+    [Parameter(Mandatory=$true)]
+    [string]$ProjectName,
+    [string]$ProjectRoot = ''
 )
 
+$ErrorActionPreference = 'Stop'
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-$repos = @()
+if (-not $ProjectRoot) { $ProjectRoot = $workspace }
 
-if ($Repo -eq "both" -or $Repo -eq "backend") { $repos += "$workspace\backend" }
-if ($Repo -eq "both" -or $Repo -eq "frontend") { $repos += "$workspace\frontend" }
+"setup: configuring '$ProjectName' at $ProjectRoot"
 
-foreach ($r in $repos) {
-    $name = Split-Path $r -Leaf
-    Write-Host "=== $name ==="
-    
-    if (!(Test-Path "$r\.git")) {
-        Write-Host "Not a git repository."
-        continue
+# ── 1. Write PROJECT file ──────────────────────────────────────────────────────
+$projectFile = Join-Path $workspace '.ai\PROJECT'
+$ProjectRoot | Set-Content -LiteralPath $projectFile -Encoding UTF8
+"setup: .ai/PROJECT -> $ProjectRoot"
+
+# ── 2. Replace {{PROJECT_NAME}} placeholders ───────────────────────────────────
+$targets = @(
+    (Join-Path $workspace '.ai\HANDOFF.md'),
+    (Join-Path $workspace 'AGENTS.md')
+)
+foreach ($t in $targets) {
+    if (-not (Test-Path -LiteralPath $t)) { continue }
+    $content = Get-Content -LiteralPath $t -Raw
+    $updated = $content -replace '\{\{PROJECT_NAME\}\}', $ProjectName
+    if ($updated -ne $content) {
+        [IO.File]::WriteAllText($t, $updated, [Text.UTF8Encoding]::new($false))
+        "setup: filled {{PROJECT_NAME}} in $(Split-Path $t -Leaf)"
     }
-
-    Write-Host "--- Status ---"
-    git -C $r status -s
-    
-    Write-Host "`n--- Diff Stat (Unstaged) ---"
-    git -C $r diff --stat
-    
-    Write-Host "`n--- Diff Stat (Staged) ---"
-    git -C $r diff --staged --stat
-
-    if ($Detailed) {
-        Write-Host "`n--- Detailed Diff (Unstaged) ---"
-        git -C $r diff -U3
-        
-        Write-Host "`n--- Detailed Diff (Staged) ---"
-        git -C $r diff --staged -U3
-    }
-    Write-Host ""
 }
+
+# ── 3. Replace {{USERNAME}} in AGENTS.md ──────────────────────────────────────
+$agentsMd = Join-Path $workspace '.ai\AGENTS.md'
+if (Test-Path -LiteralPath $agentsMd) {
+    $content = Get-Content -LiteralPath $agentsMd -Raw
+    $updated = $content -replace '\{\{USERNAME\}\}', $env:USERNAME
+    if ($updated -ne $content) {
+        [IO.File]::WriteAllText($agentsMd, $updated, [Text.UTF8Encoding]::new($false))
+        "setup: filled {{USERNAME}} -> $env:USERNAME in AGENTS.md"
+    }
+}
+
+# ── 4. Generate indexes ────────────────────────────────────────────────────────
+"setup: generating symbol + endpoint indexes..."
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'ai-workspace\scripts\generate-index.ps1')
+
+# ── 5. Run workflow integrity check ───────────────────────────────────────────
+"setup: verifying workflow..."
+& powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'ai-workspace\scripts\check-workflow.ps1')
+
+""
+"setup: DONE. Next steps:"
+"  1. Fill ai-workspace/agents/conventions.md  (stack + commands)"
+"  2. Fill ai-workspace/agents/domain-manifest.yaml  (module keywords -> files)"
+"     OR: paste the AI Bootstrapper Prompt from README into your AI agent to do steps 1+2 automatically."
+"  3. Run: brief.ps1 -Role planner -Query 'your first task'"
+

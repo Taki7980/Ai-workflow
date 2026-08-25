@@ -21,12 +21,6 @@
 .PARAMETER Caller
   Symbol name. Finds callers/dependents in symbol_index.md.
 
-.PARAMETER Module
-  Domain keyword (e.g. "payment", "driver", "ride"). Looks up domain-manifest.yaml.
-
-.PARAMETER Brain
-  Space-separated keywords. Returns top-3 brain-index hits.
-
 .EXAMPLE
   traverse.ps1 -Symbol UpdateRideState
   traverse.ps1 -Endpoint "/rides/options"

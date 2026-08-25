@@ -324,15 +324,15 @@ switch ($classification) {
 '--- NEXT PROMPT ---'
 switch ($Role) {
     'planner' {
-        '/build  read .ai/HANDOFF.md and continue'
-        '  (if plan needs refinement first: Codex review: read .ai/HANDOFF.md and refine plan)'
+        'build phase: read .ai/HANDOFF.md and continue'
+        '  (if plan needs refinement: reviewer role: read .ai/HANDOFF.md and refine plan)'
     }
     'builder' {
-        'Codex review: read .ai/HANDOFF.md and continue'
+        'review phase: read .ai/HANDOFF.md and continue'
     }
     'reviewer' {
         'If verified: run ai-workspace/scripts/complete-task.ps1'
-        'If findings: Antigravity repair -> brief.ps1 -Role reviewer -> re-review'
+        'If findings: repair -> brief.ps1 -Role reviewer -> re-review'
         'If loop >1 repair: stop and report to user'
     }
 }
@@ -342,8 +342,8 @@ $capsuleDir = Join-Path $workspace 'ai-workspace\generated'
 if (-not (Test-Path -LiteralPath $capsuleDir)) { New-Item -ItemType Directory -Force -Path $capsuleDir | Out-Null }
 $capsule = Join-Path $capsuleDir 'last-session.md'
 $nextPrompt = switch ($Role) {
-    'planner'  { '/build  read .ai/HANDOFF.md and continue' }
-    'builder'  { 'Codex review: read .ai/HANDOFF.md and continue' }
+    'planner'  { 'build phase: read .ai/HANDOFF.md and continue' }
+    'builder'  { 'review phase: read .ai/HANDOFF.md and continue' }
     'reviewer' { 'If verified: run complete-task.ps1. If findings: repair -> re-review' }
     default    { '' }
 }

@@ -8,13 +8,11 @@ Repo: `{{PROJECT_DIR}}/` | Stack: {{PROJECT_STACK}}
 
 ## Commands
 ```bash
-# Fill in your project's development, build, test, and lint commands here
-# e.g.:
-# <run-dev-server>      # Run dev server
-# <build-command>       # Build production package
-# <test-command>        # Run all tests
-# <lint-command>        # Run static analysis / linters
-# <clean-deps>          # Clear and reinstall dependencies
+{{DEV_CMD}}       # Run dev server
+{{BUILD_CMD}}     # Build production package
+{{TEST_CMD}}      # Run all tests
+{{LINT_CMD}}      # Run linters / formatter
+{{CLEAN_CMD}}     # Clear and reinstall dependencies
 ```
 
 ## Directory Structure Map
