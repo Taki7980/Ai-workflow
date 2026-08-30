@@ -1,3 +1,5 @@
+param([switch]$AllowProductSourceMutation)
+
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $brief = Join-Path $workspace 'ai-workspace\scripts\brief.ps1'
@@ -24,11 +26,9 @@ if ($hasSymbols) {
     'symbol_routing_check: skipped (index empty — run generate-index.ps1 after bootstrapping)'
 }
 if (-not (Test-Path (Join-Path $workspace '.agents\workflows\small.md'))) { throw 'small-task workflow missing' }
-foreach ($adapter in 'AGENTS.md', 'GEMINI.md', 'RTK.md') {
-    $path = Join-Path $workspace $adapter
-    if (-not (Test-Path -LiteralPath $path)) { throw "project adapter missing: $adapter" }
-    if ((Get-Content -LiteralPath $path).Count -gt 15) { throw "project adapter too large (>15 lines): $adapter" }
-}
+$agentsPath = Join-Path $workspace 'AGENTS.md'
+if (-not (Test-Path -LiteralPath $agentsPath)) { throw 'canonical AGENTS.md missing' }
+if ((Get-Content -LiteralPath $agentsPath -Raw) -notmatch 'Choose Workflow Lane') { throw 'AGENTS.md missing workflow lane rules' }
 $completion = & powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $workspace 'ai-workspace\scripts\complete-task.ps1') -ValidateOnly | Out-String
 if ($completion -notmatch 'completion_check: PASS') { throw 'task completion validation failed' }
 
@@ -57,31 +57,116 @@ if ($metricRows.Count) {
     'token_measurement: no provider usage log; no model-token savings claimed'
 }
 
-# --- INDEX STALENESS CHECK ---
-$symbolIdx   = Join-Path $workspace 'ai-workspace\agents\references\symbol_index.md'
-$endpointIdx = Join-Path $workspace 'ai-workspace\agents\references\endpoint_index.md'
-$beHead = (git -c "safe.directory=$(Join-Path $workspace 'backend')" -C (Join-Path $workspace 'backend') rev-parse --short=12 HEAD 2>$null)
-$feHead = (git -c "safe.directory=$(Join-Path $workspace 'frontend')" -C (Join-Path $workspace 'frontend') rev-parse --short=12 HEAD 2>$null)
-$rootHead = ''
-if (-not $beHead -and -not $feHead) {
-    $rootHead = (git -c "safe.directory=$workspace" -C $workspace rev-parse --short=12 HEAD 2>$null)
-}
-foreach ($idxPath in @($symbolIdx, $endpointIdx)) {
-    if (Test-Path -LiteralPath $idxPath) {
-        $idxContent = Get-Content -LiteralPath $idxPath -Raw
-        $idxBe = if ($idxContent -match 'Backend HEAD:\s*(\S+)') { $Matches[1] } else { '' }
-        $idxFe = if ($idxContent -match 'Frontend HEAD:\s*(\S+)') { $Matches[1] } else { '' }
-        $name = [IO.Path]::GetFileName($idxPath)
-        if ($beHead -and $idxBe -and -not $idxBe.StartsWith($beHead.Substring(0,[Math]::Min(12,$beHead.Length)))) {
-            "index_stale: $name backend HEAD mismatch -- run generate-index.ps1"
-        } elseif ($feHead -and $idxFe -and -not $idxFe.StartsWith($feHead.Substring(0,[Math]::Min(12,$feHead.Length)))) {
-            "index_stale: $name frontend HEAD mismatch -- run generate-index.ps1"
-        } elseif ($rootHead -and $idxBe -and -not $idxBe.StartsWith($rootHead.Substring(0,[Math]::Min(12,$rootHead.Length)))) {
-            "index_stale: $name project HEAD mismatch -- run generate-index.ps1"
-        } else {
-            "index_fresh: $name"
-        }
+# Note: coarse Git HEAD staleness check removed — index-state.json hash validation (Tests 1–8 below)
+# detects uncommitted edits, which HEAD comparison cannot. Run check-staleness.ps1 for a summary.
+
+
+# --- INDEX CORRECTNESS REGRESSION TESTS (Req 12) ---
+$traverse = Join-Path $workspace 'ai-workspace\scripts\traverse.ps1'
+$genIndex = Join-Path $workspace 'ai-workspace\scripts\generate-index.ps1'
+$stateFile = Join-Path $workspace 'ai-workspace\generated\index-state.json'
+$symbolIdxPath = Join-Path $workspace 'ai-workspace\agents\references\symbol_index.md'
+
+# Find a real source file with an indexed symbol to use as test fixture
+$testSourceRel = $null; $testSymbol2 = $null
+if ($AllowProductSourceMutation -and (Test-Path -LiteralPath $symbolIdxPath)) {
+    $rows = Get-Content -LiteralPath $symbolIdxPath | Where-Object { $_ -match '\|\s*\w+\s*\|\s*(Function|Class|Struct)\s*\|\s*\S+:\d+' }
+    if ($rows) {
+        $cells = ($rows[0] -split '\|') | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+        $testSymbol2 = $cells[0]
+        $testSourceRel = ($cells[-1] -split ':')[0].Replace('\', '/')
     }
+}
+
+if ($testSymbol2 -and $testSourceRel) {
+    $testSourceAbs = Join-Path $workspace ($testSourceRel.Replace('/', '\'))
+
+    # Test 1 — Fresh file: known symbol returns hit
+    $out1 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+    if ($out1 -notmatch 'symbol_hit') { throw "index_test_1 FAIL: fresh lookup did not return symbol_hit for $testSymbol2" }
+    'index_test_1: PASS (fresh lookup returns hit)'
+
+    # Test 2 — Uncommitted modification: stale index rejected (primary bug)
+    $original = Get-Content -LiteralPath $testSourceAbs -Raw
+    try {
+        Add-Content -LiteralPath $testSourceAbs "`n# check-workflow staleness probe"
+        $out2 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out2 -notmatch 'TRAVERSE_MISS|INDEX_STALE|INDEX_UNVERIFIED') {
+            throw "index_test_2 FAIL: uncommitted edit not detected for $testSymbol2"
+        }
+        'index_test_2: PASS (uncommitted modification rejected)'
+    } finally {
+        # Restore original — never leave repo dirty
+        [IO.File]::WriteAllText($testSourceAbs, $original, [Text.UTF8Encoding]::new($false))
+    }
+
+    # Test 3 — Deleted file: TRAVERSE_MISS
+    $backupContent = Get-Content -LiteralPath $testSourceAbs -Raw
+    try {
+        Remove-Item -LiteralPath $testSourceAbs -Force
+        $out3 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out3 -notmatch 'TRAVERSE_MISS|INDEX_STALE') { throw "index_test_3 FAIL: deleted file not detected" }
+        'index_test_3: PASS (deleted source file rejected)'
+    } finally {
+        [IO.File]::WriteAllText($testSourceAbs, $backupContent, [Text.UTF8Encoding]::new($false))
+    }
+
+    # Test 4 — Renamed/moved file: old location rejected
+    $movedPath = $testSourceAbs + '.moved_probe'
+    try {
+        Move-Item -LiteralPath $testSourceAbs -Destination $movedPath
+        $out4 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out4 -notmatch 'TRAVERSE_MISS|INDEX_STALE') { throw "index_test_4 FAIL: moved file not detected" }
+        'index_test_4: PASS (moved source file rejected)'
+    } finally {
+        Move-Item -LiteralPath $movedPath -Destination $testSourceAbs -Force
+    }
+
+    # Test 5 — New file after index: TRAVERSE_MISS for new symbol (only verifiable as miss)
+    # Simply confirm traverse produces TRAVERSE_MISS for a symbol that can't exist in index
+    $out5 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol '__NonExistentSymbol9x__' 2>&1 | Out-String
+    if ($out5 -notmatch 'TRAVERSE_MISS') { throw "index_test_5 FAIL: non-indexed symbol did not produce TRAVERSE_MISS" }
+    'index_test_5: PASS (unindexed symbol produces TRAVERSE_MISS)'
+
+    # Test 6 — Refresh restores trust
+    $edited = Get-Content -LiteralPath $testSourceAbs -Raw
+    try {
+        Add-Content -LiteralPath $testSourceAbs "`n# probe"
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $genIndex | Out-Null
+        $out6 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out6 -notmatch 'symbol_hit') { throw "index_test_6 FAIL: regenerated index did not restore hit for $testSymbol2" }
+        'index_test_6: PASS (regeneration restores trust)'
+    } finally {
+        [IO.File]::WriteAllText($testSourceAbs, $edited, [Text.UTF8Encoding]::new($false))
+        # Restore original state for repo cleanliness
+        [IO.File]::WriteAllText($testSourceAbs, $original, [Text.UTF8Encoding]::new($false))
+        & powershell -NoProfile -ExecutionPolicy Bypass -File $genIndex | Out-Null
+    }
+
+    # Test 7 — Malformed index-state.json: safe miss
+    $savedState = if (Test-Path -LiteralPath $stateFile) { Get-Content -LiteralPath $stateFile -Raw } else { $null }
+    try {
+        '{ "version": 1, BROKEN JSON' | Out-File $stateFile -Encoding utf8
+        $out7 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out7 -notmatch 'TRAVERSE_MISS|INDEX_UNVERIFIED') { throw "index_test_7 FAIL: malformed state not handled safely" }
+        'index_test_7: PASS (malformed state.json produces safe miss)'
+    } finally {
+        if ($savedState) { [IO.File]::WriteAllText($stateFile, $savedState, [Text.UTF8Encoding]::new($false)) }
+        else { Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue }
+    }
+
+    # Test 8 — Missing index-state.json: safe miss
+    $savedState2 = if (Test-Path -LiteralPath $stateFile) { Get-Content -LiteralPath $stateFile -Raw } else { $null }
+    try {
+        Remove-Item -LiteralPath $stateFile -Force -ErrorAction SilentlyContinue
+        $out8 = & powershell -NoProfile -ExecutionPolicy Bypass -File $traverse -Symbol $testSymbol2 2>&1 | Out-String
+        if ($out8 -notmatch 'TRAVERSE_MISS|INDEX_UNVERIFIED') { throw "index_test_8 FAIL: missing state not handled safely" }
+        'index_test_8: PASS (missing state.json produces safe miss)'
+    } finally {
+        if ($savedState2) { [IO.File]::WriteAllText($stateFile, $savedState2, [Text.UTF8Encoding]::new($false)) }
+    }
+} else {
+    'index_correctness_tests: skipped (safe default; pass -AllowProductSourceMutation only in a disposable fixture)'
 }
 
 'rtk_measurement: run rtk gain --history separately; shell-output savings are not model-token savings'

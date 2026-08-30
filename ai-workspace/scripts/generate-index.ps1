@@ -1,59 +1,30 @@
 param(
-    [switch]$Incremental  # Only reparse files changed in last git commit; faster for hooks
+    [switch]$Incremental  # Only reparse files changed since last index-state.json; faster for hooks
 )
 
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $backend   = "$workspace\backend"
 $frontend  = "$workspace\frontend"
 $refs      = "$workspace\ai-workspace\agents\references"
+$genDir    = "$workspace\ai-workspace\generated"
+. (Join-Path $PSScriptRoot 'index-state.ps1')
 
-# ── INCREMENTAL MODE ────────────────────────────────────────────────────────────
-# Detect which files changed in the last commit; only rebuild affected index sections.
-if ($Incremental) {
-    $beChanged = @()
-    $feChanged = @()
-    if (Test-Path "$backend\.git") {
-        $beChanged = @(git -C $backend diff-tree -r --name-only --no-commit-id HEAD 2>$null | Where-Object { $_ -match '\.(go|ts|tsx|py|rs|js|java|cs)$' })
-    }
-    if (Test-Path "$frontend\.git") {
-        $feChanged = @(git -C $frontend diff-tree -r --name-only --no-commit-id HEAD 2>$null | Where-Object { $_ -match '\.(ts|tsx|js)$' })
-    }
-    $totalChanged = $beChanged.Count + $feChanged.Count
-    if ($totalChanged -eq 0) {
-        "generate_index: incremental -- no relevant changes in last commit, indexes unchanged"
-        exit 0
-    }
-    "generate_index: incremental -- $totalChanged changed file(s), running full rebuild"
-    # Fall through to full rebuild (simpler + correct)
-}
+if (!(Test-Path $refs))    { New-Item -ItemType Directory -Force -Path $refs    | Out-Null }
+if (!(Test-Path $genDir))  { New-Item -ItemType Directory -Force -Path $genDir  | Out-Null }
 
-if (!(Test-Path $refs)) { New-Item -ItemType Directory -Force -Path $refs | Out-Null }
-
-$date = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
-$headBackend = "Unknown"
+$date = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+$headBackend = 'Unknown'
 if (Test-Path "$backend\.git") {
     $headBackend = (git -C $backend rev-parse HEAD 2>$null)
 } else {
-    $headBackend = (git -C $workspace rev-parse HEAD 2>$null)
-    if ($LASTEXITCODE -ne 0 -or -not $headBackend) { $headBackend = "Unknown" }
+    $h = (git -C $workspace rev-parse HEAD 2>$null)
+    if ($LASTEXITCODE -eq 0 -and $h) { $headBackend = $h }
 }
-$headFrontend = "n/a"
+$headFrontend = 'n/a'
 if (Test-Path "$frontend\.git") {
     $headFrontend = (git -C $frontend rev-parse HEAD 2>$null)
 }
 
-$endpointMd = "$refs\endpoint_index.md"
-$symbolMd   = "$refs\symbol_index.md"
-
-"# Endpoint Index`nGenerated: $date`nBackend HEAD: $headBackend`nFrontend HEAD: $headFrontend`n`n## Routes`n| Method | Path | Handler | File:Line |`n|---|---|---|---|" | Out-File $endpointMd -Encoding utf8
-
-"# Symbol Index`nGenerated: $date`nBackend HEAD: $headBackend`nFrontend HEAD: $headFrontend`n`n## Project Symbols`n| Symbol | Kind | File:Line |`n|---|---|---|" | Out-File $symbolMd -Encoding utf8
-
-# ── GENERIC SYMBOL + ROUTE PARSER ───────────────────────────────────────────────
-# Scans workspace source files for functions, classes, structs, and HTTP routes.
-# Covers: Python, Rust, JS/TS, Go, Java, C#, C/C++, Ruby, PHP.
-# ponytail: generic regex — ceiling is ambiguous multi-line signatures;
-#   upgrade: replace with ctags or tree-sitter per-language parsers after bootstrapping.
 $excludePatterns = @('node_modules', 'venv', '\.git', 'ai-workspace', '\.ai', '\.agents', 'dist', 'build', 'bin', 'obj', '__pycache__')
 $sourceExts = '^\.(py|rs|js|ts|tsx|go|java|cs|cpp|h|rb|php)$'
 
@@ -64,25 +35,84 @@ $files = Get-ChildItem -Path $workspace -File -Recurse -ErrorAction SilentlyCont
     -not $skip -and ($_.Extension -match $sourceExts)
 }
 
+# ── INCREMENTAL MODE ────────────────────────────────────────────────────────────
+# Use stored file hashes (not git diff-tree) to detect working-tree changes.
+# ponytail: changed sets use full rebuild; add row-level merging only when measured rebuild cost requires it.
+$prevState = Get-IndexState -Workspace $workspace
+if ($Incremental -and $null -ne $prevState) {
+    $unchanged = 0
+    foreach ($f in $files) {
+        $rel = $f.FullName.Substring($workspace.Length + 1).Replace('\', '/')
+        if (Test-IndexedFileFresh -State $prevState -RelPath $rel -Workspace $workspace) {
+            $unchanged++
+        }
+    }
+    $previousCount = @($prevState.files.PSObject.Properties).Count
+    $changed = $files.Count - $unchanged + [Math]::Max(0, $previousCount - $files.Count)
+    if ($changed -eq 0 -and $previousCount -eq $files.Count) {
+        "generate_index: incremental -- all $unchanged file(s) unchanged, indexes current"
+        exit 0
+    }
+    "generate_index: incremental -- $changed changed / $unchanged unchanged, rebuilding"
+}
+
+# ── GENERATE TO TEMP FILES (atomic) ────────────────────────────────────────────
+$runId       = [Guid]::NewGuid().ToString('N')
+$endpointTmp = "$genDir\endpoint_index.$runId.tmp"
+$symbolTmp   = "$genDir\symbol_index.$runId.tmp"
+$stateTmp    = "$genDir\index-state.$runId.tmp"
+$endpointMd  = "$refs\endpoint_index.md"
+$symbolMd    = "$refs\symbol_index.md"
+$statePath   = "$genDir\index-state.json"
+
+"# Endpoint Index`nGenerated: $date`nBackend HEAD: $headBackend`nFrontend HEAD: $headFrontend`n`n## Routes`n| Method | Path | Handler | File:Line |`n|---|---|---|---|" | Out-File $endpointTmp -Encoding utf8
+"# Symbol Index`nGenerated: $date`nBackend HEAD: $headBackend`nFrontend HEAD: $headFrontend`n`n## Project Symbols`n| Symbol | Kind | File:Line |`n|---|---|---|" | Out-File $symbolTmp -Encoding utf8
+
+# ── PARSE SOURCE FILES ───────────────────────────────────────────────────────────
+# ponytail: generic regex — ceiling is ambiguous multi-line signatures;
+#   upgrade: replace with ctags or tree-sitter per-language parsers after bootstrapping.
+$fileHashes = [ordered]@{}
+
 foreach ($file in $files) {
     $rel   = $file.FullName.Substring($workspace.Length + 1).Replace('\', '/')
+    # Hash every file that participates in indexing (for index-state.json)
+    $hash = Get-CurrentFileHash -AbsPath $file.FullName
+    if ($hash) { $fileHashes[$rel] = @{ sha256 = $hash } }
+
     $lines = Get-Content $file.FullName -ErrorAction SilentlyContinue
     if (-not $lines) { continue }
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $line = $lines[$i]
-        # Symbol: function/class/struct across common languages
         if ($line -match '^\s*(?:def|fn|function|class|public\s+class|struct|pub\s+fn|pub\s+struct|async\s+function)\s+(\w+)') {
             $name = $matches[1]
             $kind = if ($line -match 'class') { 'Class' } elseif ($line -match 'struct') { 'Struct' } else { 'Function' }
-            "| $name | $kind | $($rel):$($i+1) |" | Out-File $symbolMd -Append -Encoding utf8
+            "| $name | $kind | $($rel):$($i+1) |" | Out-File $symbolTmp -Append -Encoding utf8
         }
-        # Route: common framework decorator/router patterns
         if ($line -match '(?:@(?:app|router|bp)\.(get|post|put|delete|patch)|router\.(Get|Post|Put|Delete|Patch))\s*\(\s*[''"]([^''"]+)[''"]') {
             $method = $matches[1].ToUpper()
             $path   = $matches[3]
-            "| $method | $path | | $($rel):$($i+1) |" | Out-File $endpointMd -Append -Encoding utf8
+            "| $method | $path | | $($rel):$($i+1) |" | Out-File $endpointTmp -Append -Encoding utf8
         }
     }
 }
 
-"generate_index: done -- symbol_index.md + endpoint_index.md written to $refs"
+# ── WRITE index-state.json ───────────────────────────────────────────────────────
+$stateObj = [ordered]@{
+    version     = 1
+    generatedAt = (Get-Date -Format 'o')
+    backendHead = $headBackend
+    frontendHead= $headFrontend
+    files       = $fileHashes
+}
+$stateJson = $stateObj | ConvertTo-Json -Depth 4 -Compress:$false
+# Validate before committing
+$stateJson | ConvertFrom-Json | Out-Null   # throws if malformed
+
+$stateJson | Out-File $stateTmp -Encoding utf8
+
+# ── ATOMIC REPLACE (all-or-nothing) ─────────────────────────────────────────────
+Move-Item -LiteralPath $symbolTmp   -Destination $symbolMd   -Force
+Move-Item -LiteralPath $endpointTmp -Destination $endpointMd -Force
+Move-Item -LiteralPath $stateTmp    -Destination $statePath  -Force
+
+"generate_index: done -- symbol_index.md + endpoint_index.md + index-state.json written ($($fileHashes.Count) files hashed)"

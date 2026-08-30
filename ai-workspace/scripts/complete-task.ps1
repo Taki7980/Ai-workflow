@@ -78,3 +78,18 @@ if ($incidentRequested) {
 }
 
 if (-not $captureRequested -and -not $incidentRequested) { 'task_completion: no reusable capture' }
+
+# ── INDEX REFRESH ────────────────────────────────────────────────────────────────
+# Refresh after verified task completion so next lookup uses fresh index (Req 8/9).
+# Runs last — existing correct index preserved if refresh fails.
+$genIdx = Join-Path $workspace 'ai-workspace\scripts\generate-index.ps1'
+if (Test-Path -LiteralPath $genIdx) {
+    try {
+        $result = & powershell -NoProfile -ExecutionPolicy Bypass -File $genIdx -Incremental | Out-String
+        "index_refresh: $($result.Trim())"
+    } catch {
+        "index_refresh_warning: incremental refresh failed -- existing index preserved. Run generate-index.ps1 manually."
+    }
+} else {
+    'index_refresh_warning: generate-index.ps1 not found; index not refreshed'
+}

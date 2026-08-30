@@ -6,28 +6,23 @@
 .PARAMETER ProjectName
   Human-readable project name (replaces {{PROJECT_NAME}} everywhere).
 
-.PARAMETER ProjectRoot
-  Absolute path to your project root. Defaults to workspace root (auto-detected).
-
 .EXAMPLE
   powershell -NoProfile -ExecutionPolicy Bypass -File ai-workspace/scripts/setup.ps1 -ProjectName "MyApp"
 #>
 param(
     [Parameter(Mandatory=$true)]
-    [string]$ProjectName,
-    [string]$ProjectRoot = ''
+    [string]$ProjectName
 )
 
 $ErrorActionPreference = 'Stop'
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
-if (-not $ProjectRoot) { $ProjectRoot = $workspace }
 
-"setup: configuring '$ProjectName' at $ProjectRoot"
+"setup: configuring '$ProjectName' at $workspace"
 
 # ── 1. Write PROJECT file ──────────────────────────────────────────────────────
 $projectFile = Join-Path $workspace '.ai\PROJECT'
-$ProjectRoot | Set-Content -LiteralPath $projectFile -Encoding UTF8
-"setup: .ai/PROJECT -> $ProjectRoot"
+$workspace | Set-Content -LiteralPath $projectFile -Encoding UTF8
+"setup: .ai/PROJECT -> $workspace"
 
 # ── 2. Replace {{PROJECT_NAME}} placeholders ───────────────────────────────────
 $targets = @(
@@ -37,7 +32,7 @@ $targets = @(
 foreach ($t in $targets) {
     if (-not (Test-Path -LiteralPath $t)) { continue }
     $content = Get-Content -LiteralPath $t -Raw
-    $updated = $content -replace '\{\{PROJECT_NAME\}\}', $ProjectName
+    $updated = $content.Replace('{{PROJECT_NAME}}', $ProjectName)
     if ($updated -ne $content) {
         [IO.File]::WriteAllText($t, $updated, [Text.UTF8Encoding]::new($false))
         "setup: filled {{PROJECT_NAME}} in $(Split-Path $t -Leaf)"
@@ -45,10 +40,10 @@ foreach ($t in $targets) {
 }
 
 # ── 3. Replace {{USERNAME}} in AGENTS.md ──────────────────────────────────────
-$agentsMd = Join-Path $workspace '.ai\AGENTS.md'
+$agentsMd = Join-Path $workspace 'AGENTS.md'
 if (Test-Path -LiteralPath $agentsMd) {
     $content = Get-Content -LiteralPath $agentsMd -Raw
-    $updated = $content -replace '\{\{USERNAME\}\}', $env:USERNAME
+    $updated = $content.Replace('{{USERNAME}}', $env:USERNAME)
     if ($updated -ne $content) {
         [IO.File]::WriteAllText($agentsMd, $updated, [Text.UTF8Encoding]::new($false))
         "setup: filled {{USERNAME}} -> $env:USERNAME in AGENTS.md"

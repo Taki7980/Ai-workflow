@@ -5,6 +5,7 @@ param(
 )
 
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+. (Join-Path $PSScriptRoot 'index-state.ps1')
 $handoff = Join-Path $workspace '.ai\HANDOFF.md'
 $research = Join-Path $workspace 'ai-workspace\agents\research.md'
 $manifest = Join-Path $workspace 'ai-workspace\agents\domain-manifest.yaml'
@@ -132,6 +133,7 @@ if ($terms.Count -gt 0) {
 
     # 3. Exact symbol detection. Match complete index cells so short acronyms
     # and ordinary capitalized words cannot hit unrelated substrings.
+    # Hash-validate before classifying — brief must not trust stale index rows (Req 5).
     if ($classification -eq 'ambiguous') {
         $symbolCandidates = [regex]::Matches($Query, '\b(?:use[A-Z][A-Za-z0-9]*|[A-Z][A-Za-z0-9]{2,})\b') |
             ForEach-Object { $_.Value } | Select-Object -Unique
@@ -139,15 +141,23 @@ if ($terms.Count -gt 0) {
         foreach ($indexPath in @($symbolIndex, $endpointIndex)) {
             if (Test-Path -LiteralPath $indexPath) { $indexLines += Get-Content -LiteralPath $indexPath }
         }
+        $briefIndexState = Get-IndexState -Workspace $workspace
         foreach ($candidate in $symbolCandidates) {
-            $found = $indexLines | Where-Object {
+            $found = @($indexLines | Where-Object {
                 $cells = $_ -split '\|' | ForEach-Object { $_.Trim() }
                 $cells -contains $candidate
-            } | Select-Object -First 1
+            })
             if ($found) {
-                $classification = 'symbol-name'
-                $matchedSymbol = $candidate
-                break
+                foreach ($row in $found) {
+                    $cells = $row -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+                    $rel = Normalize-IndexPath ($cells[-1])
+                    if ($rel -and (Test-IndexedFileFresh -State $briefIndexState -RelPath $rel -Workspace $workspace)) {
+                        $classification = 'symbol-name'
+                        $matchedSymbol = $candidate
+                        break
+                    }
+                }
+                if ($matchedSymbol) { break }
             }
         }
     }
@@ -249,8 +259,10 @@ if ($terms.Count -gt 0) {
 # --- RESEARCH CACHE — emit hits even when stale; label them so agent can verify only what it uses ---
 if ($terms.Count -gt 0 -and (Test-Path -LiteralPath $research)) {
     $lines = Get-Content -LiteralPath $research
-    $cachedBackendHead = (($lines | Select-String '^backend_head:\s*(\S+)' | Select-Object -First 1).Matches.Groups[1].Value)
-    $cachedFrontendHead = (($lines | Select-String '^frontend_head:\s*(\S+)' | Select-Object -First 1).Matches.Groups[1].Value)
+    $cachedBackendMatch = $lines | Select-String '^backend_head:\s*(\S+)' | Select-Object -First 1
+    $cachedFrontendMatch = $lines | Select-String '^frontend_head:\s*(\S+)' | Select-Object -First 1
+    $cachedBackendHead = if ($cachedBackendMatch) { $cachedBackendMatch.Matches.Groups[1].Value } else { '' }
+    $cachedFrontendHead = if ($cachedFrontendMatch) { $cachedFrontendMatch.Matches.Groups[1].Value } else { '' }
     $isStale = -not ($cachedBackendHead -eq $backendHead -and $cachedFrontendHead -eq $frontendHead)
     if ($isStale) {
         'research_stale: true -- run generate-index.ps1 to refresh; research hits suppressed'
