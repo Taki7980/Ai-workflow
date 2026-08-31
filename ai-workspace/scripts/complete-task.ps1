@@ -5,6 +5,7 @@ param(
     [string]$Keywords,
     [string]$Problem,
     [string]$Solution,
+    [string]$Evidence,
     [string]$RootCause = '',
     [string]$FailedApproaches = '',
     [string]$FilesChanged = '',
@@ -26,11 +27,12 @@ foreach ($field in 'Goal / state', 'Changed files', 'Checks', 'Blockers', 'Exact
     if ($handoffText -notmatch [regex]::Escape($field)) { throw "completion: HANDOFF missing $field" }
 }
 
-$captureRequested = [bool]($Type -or $Keywords -or $Problem -or $Solution -or $Lesson)
+$captureRequested = [bool]($Type -or $Keywords -or $Problem -or $Solution -or $Evidence -or $Lesson)
 if ($captureRequested) {
-    foreach ($field in 'Type', 'Keywords', 'Problem', 'Solution', 'Lesson') {
+    foreach ($field in 'Type', 'Keywords', 'Problem', 'Solution', 'Evidence', 'Lesson') {
         if (-not (Get-Variable -Name $field -ValueOnly)) { throw "completion: capture missing $field" }
     }
+    if ([string]::IsNullOrWhiteSpace($Evidence)) { throw 'completion: Evidence cannot be blank' }
 }
 
 $incidentRequested = [bool]($IncidentPath -or $VerifiedCommit)
@@ -59,7 +61,7 @@ if ($ValidateOnly) {
 
 if ($captureRequested) {
     $captureArgs = @{
-        Type = $Type; Keywords = $Keywords; Problem = $Problem; Solution = $Solution; Lesson = $Lesson
+        Type = $Type; Keywords = $Keywords; Problem = $Problem; Solution = $Solution; Evidence = $Evidence; Lesson = $Lesson
         RootCause = $RootCause; FailedApproaches = $FailedApproaches; FilesChanged = $FilesChanged
     }
     & $capture @captureArgs

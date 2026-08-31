@@ -12,11 +12,17 @@ param(
     [Parameter(Mandatory=$true)]
     [string]$Solution,
 
+    [Parameter(Mandatory=$true)]
+    [string]$Evidence,
+
     [string]$RootCause = '',
     [string]$FailedApproaches = '',
     [string]$FilesChanged = '',
     [string]$Lesson = ''
 )
+
+$ErrorActionPreference = 'Stop'
+if ([string]::IsNullOrWhiteSpace($Evidence)) { throw 'brain capture: Evidence cannot be blank' }
 
 # Brain Capture: Append a new memory entry to the brain
 # Deterministic file append; only its compact result reaches agent context.
@@ -83,6 +89,8 @@ $entry = @(
     "**Problem**: $Problem"
     ''
     "**Solution**: $Solution"
+    ''
+    "**Evidence**: $Evidence"
 )
 
 if ($RootCause) {
