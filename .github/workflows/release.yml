@@ -1,0 +1,61 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate scripts
+        shell: pwsh
+        run: |
+          $failures = @()
+          Get-ChildItem -Path . -Recurse -Filter *.ps1 -File | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($error in $errors) { $failures += "$($_.FullName):$($error.Extent.StartLineNumber): $($error.Message)" }
+          }
+          if ($failures.Count -gt 0) { $failures | ForEach-Object { Write-Error $_ }; exit 1 }
+          ./ai-workspace/scripts/complete-task.ps1 -ValidateOnly
+
+      - name: Build release bundle
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path release | Out-Null
+          $zip = "release/ai-workflow-$env:GITHUB_REF_NAME.zip"
+          $items = @('AGENTS.md', 'README.md', 'ai-workspace', '.agents', '.ai') | Where-Object { Test-Path $_ }
+          Compress-Archive -Path $items -DestinationPath $zip -CompressionLevel Optimal
+          $hash = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLowerInvariant()
+          "$hash  $(Split-Path $zip -Leaf)" | Set-Content -Encoding ascii release/SHA256SUMS.txt
+
+      - name: Attest release bundle
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: 'release/*'
+
+      - name: Publish GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $assets = Get-ChildItem release -File | ForEach-Object { $_.FullName }
+          gh release create $env:GITHUB_REF_NAME $assets --verify-tag --generate-notes --title $env:GITHUB_REF_NAME
