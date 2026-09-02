@@ -1,0 +1,70 @@
+name: ci
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  powershell-validation:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Parse every PowerShell script
+        shell: pwsh
+        run: |
+          $failures = @()
+          Get-ChildItem -Path . -Recurse -Filter *.ps1 -File | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            [void][System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            foreach ($error in $errors) {
+              $failures += "$($_.FullName):$($error.Extent.StartLineNumber): $($error.Message)"
+            }
+          }
+          if ($failures.Count -gt 0) {
+            $failures | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+
+      - name: Reject dynamic code execution primitives
+        shell: pwsh
+        run: |
+          $violations = @()
+          Get-ChildItem -Path . -Recurse -Filter *.ps1 -File | ForEach-Object {
+            $tokens = $null
+            $errors = $null
+            $ast = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
+            $commands = $ast.FindAll({
+              param($node)
+              $node -is [System.Management.Automation.Language.CommandAst] -and $node.GetCommandName() -eq 'Invoke-Expression'
+            }, $true)
+            foreach ($command in $commands) {
+              $violations += "$($_.FullName):$($command.Extent.StartLineNumber): Invoke-Expression is forbidden"
+            }
+          }
+          if ($violations.Count -gt 0) {
+            $violations | ForEach-Object { Write-Error $_ }
+            exit 1
+          }
+
+      - name: Validate repository completion invariants
+        shell: powershell
+        run: ./ai-workspace/scripts/complete-task.ps1 -ValidateOnly
+
+      - name: Ensure validation leaves repository clean
+        shell: pwsh
+        run: git diff --exit-code
