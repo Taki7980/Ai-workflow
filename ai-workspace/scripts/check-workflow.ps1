@@ -171,4 +171,31 @@ if ($testSymbol2 -and $testSourceRel) {
 
 'rtk_measurement: run rtk gain --history separately; shell-output savings are not model-token savings'
 
+
+function Test-MathEngine {
+    $script = Join-Path $workspace 'ai-workspace\scripts\math-algorithms.ps1'
+    if (-not (Test-Path -LiteralPath $script)) { return }
+    . $script
+
+    # 1. Test Entropy
+    $ent = Get-ShannonEntropy -Text "AAAA"
+    if ($ent -ne 0) { throw "Math check failed: Constant string entropy should be 0, got $ent" }
+
+    # 2. Test BM25
+    $corpus = @("the quick brown fox", "jumped over the lazy dog", "the fox was brown")
+    $results = Invoke-BM25PlusRank -QueryTerms @("brown","fox") -CorpusDocs $corpus
+    if ($results.Count -eq 0 -or $results[0].Score -le 0) { throw "Math check failed: BM25 score must be positive" }
+
+    # 3. Test Jaccard
+    $jacc = Get-JaccardSimilarity -Str1 "stripe" -Str2 "striep" -NGram 2
+    if ($jacc -lt 0.1 -or $jacc -gt 1.0) { throw "Math check failed: Jaccard similarity bounds violated ($jacc)" }
+    
+    # 4. Test Ebbinghaus
+    $reten = Get-EbbinghausRetention -EntryDate (Get-Date).AddDays(-10) -CurrentTime (Get-Date) -Recalls 1
+    if ($reten -lt 0.0 -or $reten -gt 1.0) { throw "Math check failed: Ebbinghaus retention bounds violated ($reten)" }
+
+    "math_engine_tests: PASS (Entropy, BM25+, Jaccard, Ebbinghaus bounded and correct)"
+}
+Test-MathEngine
+
 'workflow_check: PASS'

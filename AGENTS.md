@@ -23,6 +23,7 @@ These optional skills/tools can reduce context use. Measure provider input/outpu
 - **`ponytail` skill**: Enables ultra-lean coding mode — cuts over-engineering, unrequested abstractions, and boilerplate.
 - **`caveman` skill**: Enables direct output mode — eliminates conversational filler tokens.
 - **`rtk` (Rust Token Killer)** / **Output Filters**: Filters noisy CLI output (`git diff`, `test`, `build`, `lint`) before returning it to the LLM context.
+- **Math Engine**: Probabilistic retrieval, entropy monitoring, and cognitive memory models built into `traverse.ps1` and `brain-recall.ps1`.
 
 ---
 

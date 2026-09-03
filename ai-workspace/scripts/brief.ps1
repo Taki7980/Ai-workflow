@@ -6,6 +6,7 @@ param(
 
 $workspace = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 . (Join-Path $PSScriptRoot 'index-state.ps1')
+. (Join-Path $PSScriptRoot 'math-algorithms.ps1')
 $handoff = Join-Path $workspace '.ai\HANDOFF.md'
 $research = Join-Path $workspace 'ai-workspace\agents\research.md'
 $manifest = Join-Path $workspace 'ai-workspace\agents\domain-manifest.yaml'

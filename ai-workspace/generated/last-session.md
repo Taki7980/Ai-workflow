@@ -1,12 +1,12 @@
 ﻿# Last Session Capsule
-generated: 2026-08-31 05:59:19
-role: planner
-query: agent memory atlas report improve workflow memory
-backend_head: c1686a372398
+generated: 2026-09-04 04:06:18
+role: reviewer
+query: workflow token efficiency
+backend_head: a3cabd5b34f3
 frontend_head: n/a
 classification: ambiguous
 matched_module: 
 matched_symbol: 
-next_prompt: build phase: read .ai/HANDOFF.md and continue
+next_prompt: If verified: run complete-task.ps1. If findings: repair -> re-review
 routed_files:
   none

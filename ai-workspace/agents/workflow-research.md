@@ -91,3 +91,69 @@ Gemini CLI exposes `/stats` cached-token data only for API-key or Vertex AI auth
 - [ripgrep official guide](https://github.com/BurntSushi/ripgrep/blob/master/GUIDE.md)
 - [Universal Ctags JSON output](https://docs.ctags.io/en/stable/man/ctags-json-output.5.html)
 - [Git diff official documentation](https://git-scm.com/docs/git-diff)
+
+---
+
+## Formal Mathematical Foundations & Algorithmic Rigor
+
+The Universal AI Workflow is grounded in five key domains of statistical learning, information theory, and cognitive science:
+
+### 1. Probabilistic Information Retrieval: Okapi BM25+ & Lower-Bound Relevance
+Standard BM25 suffers from over-penalization of lengthy documents when matching rare queries. To guarantee monotonicity and avoid zero-relevance pathologies, the retrieval engine implements **BM25+** (Lv & Zhai, CIKM 2011):
+
+$$Score(D, Q) = \sum_{i=1}^{n} \text{IDF}(q_i) \cdot \left[ \frac{f(q_i, D) \cdot (k_1 + 1)}{f(q_i, D) + k_1 \cdot \left(1 - b + b \cdot \frac{|D|}{\text{avgdl}}
+ight)} + \delta 
+ight]$$
+
+Where:
+- $\text{IDF}(q_i) = \ln \left( \frac{N - n(q_i) + 0.5}{n(q_i) + 0.5} + 1 
+ight)$ is the Robertson-Spärck Jones Inverse Document Frequency with non-negative smoothing.
+- $k_1 \in [1.2, 2.0]$ governs term frequency saturation.
+- $b = 0.75$ controls document length normalization.
+- $\delta = 1.0$ guarantees that any document containing query term $q_i$ receives a strictly positive lower bound of $\delta \cdot \text{IDF}(q_i)$, preventing recall starvation in dense incident catalogs.
+
+### 2. Cognitive Memory Activation: Anderson's ACT-R & Ebbinghaus Forgetting Decay
+Durable agent memory requires temporal decay balanced by periodic reinforcement. Following Anderson's ACT-R cognitive architecture (Anderson & Schooler, 1991) and the Ebbinghaus forgetting dynamics:
+
+$$R(t) = \exp\left( -\frac{\Delta t}{S \cdot (1 + \ln(1 + k))} 
+ight)$$
+
+$$\text{Score}_{\text{retrieval}}(E) = \text{Score}_{\text{BM25+}}(Q, E) \cdot R(\Delta t)$$
+
+Where:
+- $\Delta t$ is elapsed time in days since memory capture.
+- $S$ is memory base stability factor ($S = 30$ days).
+- $k$ is the reinforcement count (number of verified task recalls).
+- As recalls increase ($k \to \infty$), memory half-life grows logarithmically, replicating human expert long-term potentiation while filtering transient noise.
+
+### 3. Spectral Graph Theory & Personalized PageRank (PPR)
+Symbol dependency navigation models the codebase as a directed graph $G = (V, E)$ with transition probability matrix $\mathbf{P}$. The stationary distribution $\boldsymbol{\pi}$ under random walks with restart is solved via the power iteration algorithm:
+
+$$\boldsymbol{\pi}^{(k+1)} = (1 - \alpha) \mathbf{P}^T \boldsymbol{\pi}^{(k)} + \alpha \mathbf{v}$$
+
+Where:
+- $\mathbf{v}$ is the personalization vector (concentrated on seed symbols in the current task).
+- $\alpha = 0.15$ is the teleportation parameter.
+- By the **Perron-Frobenius Theorem**, the primitive, irreducible Markov transition matrix possesses a unique dominant eigenvalue $\lambda_1 = 1$, guaranteeing geometric convergence $\|\boldsymbol{\pi}^{(k)} - \boldsymbol{\pi}^*\|_1 \le (1 - \alpha)^k$. This identifies high-centrality dependents and blast-radius vulnerabilities deterministically in $O(|E|)$ time without LLM traversal.
+
+### 4. Information-Theoretic State Compression: Rate-Distortion & Entropy Bounds
+The 30-line constraint in `.ai/HANDOFF.md` enforces a finite rate-distortion code. Let $X$ represent the high-dimensional codebase state and $\hat{X}$ represent the compressed handoff capsule. By Shannon's Rate-Distortion Theorem:
+
+$$R(D) = \min_{p(\hat{x}|x): \mathbb{E}[d(X, \hat{X})] \le D} I(X; \hat{X})$$
+
+Empirical Shannon entropy of the handoff text:
+
+$$H(X) = - \sum_{i=1}^{|\Sigma|} P(x_i) \log_2 P(x_i)$$
+
+The diagnostics monitor:
+- Information Density: $I_D = \frac{H(X)}{\log_2 |\Sigma|} \in [0, 1]$.
+- If $I_D < 0.3$, the capsule exhibits excessive repetitive redundancy (wasting LLM context tokens).
+- If $I_D > 0.85$, the state approaches maximal entropy, signaling that unstructured unstructured noise has displaced actionable invariant contracts.
+
+### 5. String Metric Spaces: Jaccard N-gram Metric
+To resolve symbol typos and identifiers without language server overhead, strings are embedded into an $n$-gram multiset space equipped with the Jaccard distance:
+
+$$d_J(s_1, s_2) = 1 - \frac{|S_n(s_1) \cap S_n(s_2)|}{|S_n(s_1) \cup S_n(s_2)|}$$
+
+$d_J$ forms a valid metric space satisfying identity of indiscernibles, symmetry, and triangle inequality $d_J(A, C) \le d_J(A, B) + d_J(B, C)$, providing a robust similarity filter with threshold $J \ge 0.3$.
+

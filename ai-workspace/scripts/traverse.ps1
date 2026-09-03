@@ -53,6 +53,7 @@ $brainIndex    = Join-Path $workspace 'ai-workspace\agents\brain\brain-index.md'
 
 # Load shared helper (Get-IndexState, Normalize-IndexPath, Test-IndexedFileFresh)
 . (Join-Path $PSScriptRoot 'index-state.ps1')
+. (Join-Path $PSScriptRoot 'math-algorithms.ps1')
 
 $indexState = Get-IndexState -Workspace $workspace
 $hit = $false
@@ -93,9 +94,21 @@ if ($Symbol) {
                     ($_ -split '\|' | ForEach-Object { $_.Trim() }) -contains $Symbol
                 })
         if (-not $rows) {
-            # Partial match fallback
-            $rows = @(Get-Content -LiteralPath $symbolIndex |
-                    Where-Object { $_ -like "*$Symbol*" -and $_ -match '\|' -and $_ -notmatch '^[\|\s\-]+$' })
+            # Jaccard N-gram Similarity Match Fallback
+            $allValidRows = @(Get-Content -LiteralPath $symbolIndex | Where-Object { $_ -match '\|' -and $_ -notmatch '^[\|\s\-]+$' })
+            $scoredSyms = foreach ($row in $allValidRows) {
+                # Extract symbol name which is second column typically: | SymbolName | Kind | File:Line |
+                $cells = $row -split '\|' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+                $symName = $cells[0]
+                if (-not $symName) { continue }
+                $jScore = Get-JaccardSimilarity -Str1 $Symbol -Str2 $symName -NGram 2
+                if ($jScore -ge 0.3) {
+                    [pscustomobject]@{ Score = $jScore; Row = $row; Sym = $symName }
+                }
+            }
+            if ($scoredSyms) {
+                $rows = @($scoredSyms | Sort-Object @{Expression='Score';Descending=$true} | Select-Object -First 10 | ForEach-Object { $_.Row })
+            }
         }
         if ($rows) {
             $valid, $stale = Select-FreshRows -Rows ($rows | Select-Object -First 5) -Kind 'symbol'
@@ -155,13 +168,13 @@ if ($Err) {
     foreach ($cachePath in @($hotCache, $incidentCache)) {
         if (Test-Path -LiteralPath $cachePath) { $cacheLines += Get-Content -LiteralPath $cachePath }
     }
-    $scored = foreach ($line in $cacheLines) {
-        if (-not $line.Trim()) { continue }
-        $score = 0
-        foreach ($t in $terms) {
-            if ($line.IndexOf($t, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $score++ }
-        }
-        if ($score -ge 1) { [pscustomobject]@{ Score = $score; Line = $line } }
+    $corpusDocs = @()
+    foreach ($line in $cacheLines) {
+        if ($line.Trim()) { $corpusDocs += $line.Trim() }
+    }
+    $ranked = Invoke-BM25PlusRank -QueryTerms $terms -CorpusDocs $corpusDocs
+    $scored = foreach ($item in $ranked) {
+        [pscustomobject]@{ Score = $item.Score; Line = $item.Original }
     }
     $top = $scored | Sort-Object @{Expression='Score';Descending=$true} | Select-Object -First 2
     if ($top) {
@@ -215,21 +228,15 @@ if ($Module) {
 # ── Brain lookup ───────────────────────────────────────────────────────────────
 # Brain is historical knowledge — no hash validation (Req 16).
 if ($Brain) {
-    $terms = $Brain -split '\s+' | Where-Object { $_.Length -ge 3 } | Select-Object -Unique
     if (Test-Path -LiteralPath $brainIndex) {
-        $brainLines = Get-Content -LiteralPath $brainIndex
-        $scored = foreach ($bl in $brainLines) {
-            if ($bl -notmatch '^\|.*\|$') { continue }
-            if ($bl -match '^\|[-\s|]+\|$' -or $bl -match '^\|\s*ID\s*\|') { continue }
-            $bs = 0
-            foreach ($t in $terms) { if ($bl.IndexOf($t, [StringComparison]::OrdinalIgnoreCase) -ge 0) { $bs++ } }
-            if ($bs -gt 0) { [pscustomobject]@{ Score = $bs; Line = $bl } }
-        }
-        $top = $scored | Sort-Object @{Expression='Score';Descending=$true} | Select-Object -First 3
-        if ($top) {
-            "brain_hit: (read ai-workspace/agents/brain/brain.md [ID] for full entry)"
-            $top | ForEach-Object { "  $($_.Line)" }
-            $hit = $true
+        $recallScript = Join-Path $workspace 'ai-workspace\scripts\brain-recall.ps1'
+        if (Test-Path -LiteralPath $recallScript) {
+            $recallOut = & powershell -NoProfile -ExecutionPolicy Bypass -File $recallScript -Query $Brain -MaxResults 3
+            if ($recallOut -match 'relevance_score') {
+                "brain_hit: (mathematically ranked via BM25+ and Ebbinghaus activation)"
+                $recallOut | Out-String | Write-Host
+                $hit = $true
+            }
         }
     }
 }

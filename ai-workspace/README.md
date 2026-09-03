@@ -26,6 +26,8 @@ scripts/
   compile-incident-cache.ps1    — compiles Obsidian incidents → incident-cache.jsonl
   check-workflow.ps1    — validates workflow structure, brain IDs, index staleness
   check-staleness.ps1   — DEPRECATED: safe to delete
+  math-algorithms.ps1   — Mathematical models: BM25+, Jaccard, PageRank, Entropy, Ebbinghaus
+  analytics-engine.py   — Math evaluation test suite & CLI for CI/CD gates
 
 
 agents/
